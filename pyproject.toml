@@ -1,0 +1,22 @@
+[project]
+name = "drakde"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Pavadol Yamsiri", email = "pavyamsiri@gmail.com" }
+]
+requires-python = ">=3.13"
+dependencies = []
+
+[build-system]
+requires = ["maturin>=1.0,<2.0"]
+build-backend = "maturin"
+
+[tool.maturin]
+module-name = "drakde._drakde"
+
+[tool.pyright]
+include = ["src"]
+venvPath = "."
+venv = ".venv"
