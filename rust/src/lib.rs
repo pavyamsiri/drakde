@@ -1,4 +1,4 @@
-mod bivariate;
+pub mod bivariate;
 
 #[pyo3::pymodule]
 mod _drakde {
@@ -8,8 +8,16 @@ mod _drakde {
     use crate::bivariate;
 
     #[pyclass(skip_from_py_object)]
-    #[derive(Clone)]
     pub struct BivariateKDE(bivariate::BivariateKDE);
+
+    impl Clone for BivariateKDE {
+        fn clone(&self) -> Self {
+            let inner = &self.0;
+            BivariateKDE(bivariate::BivariateKDE::new(inner.x.clone(), inner.y.clone(), inner.weights.clone()))
+        }
+    }
+
+    use rayon::prelude::*;
 
     #[pymethods]
     impl BivariateKDE {
@@ -42,11 +50,7 @@ mod _drakde {
                 None => vec![1.0; x_vec.len()],
             };
 
-            Ok(BivariateKDE(bivariate::BivariateKDE {
-                x: x_vec,
-                y: y_vec,
-                weights: weights_vec,
-            }))
+            Ok(BivariateKDE(bivariate::BivariateKDE::new(x_vec, y_vec, weights_vec)))
         }
 
         pub fn __repr__(&self) -> String {
@@ -62,6 +66,35 @@ mod _drakde {
 
         pub fn estimate_scalar(&self, x: f64, y: f64, scale_length: f64) -> f64 {
             self.0.estimate_scalar(x, y, scale_length)
+        }
+
+        /// Estimate for many (x,y) pairs in a single call. This avoids Python-level loops.
+        /// xs and ys must be 1-D arrays of the same length. Returns a NumPy array of results.
+        pub fn estimate_vector<'py>(
+            &self,
+            py: pyo3::prelude::Python<'py>,
+            xs: PyReadonlyArray1<'_ , f64>,
+            ys: PyReadonlyArray1<'_ , f64>,
+            scale_length: f64,
+        ) -> pyo3::PyResult<pyo3::Py< numpy::PyArray1<f64> >> {
+            let xs_slice = xs.as_slice()?;
+            let ys_slice = ys.as_slice()?;
+            if xs_slice.len() != ys_slice.len() {
+                return Err(pyo3::exceptions::PyValueError::new_err(
+                    "xs and ys must have the same length",
+                ));
+            }
+            let n = xs_slice.len();
+
+            // Parallel evaluation using rayon
+            let results: Vec<f64> = (0..n)
+                .into_par_iter()
+                .map(|i| self.0.estimate_scalar(xs_slice[i], ys_slice[i], scale_length))
+                .collect();
+
+            let arr = numpy::PyArray1::from_vec(py, results);
+            // convert borrowed reference into owned Py<PyArray1<f64>>
+            Ok(arr.to_owned().into())
         }
     }
 

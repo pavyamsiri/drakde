@@ -23,16 +23,17 @@ if __name__ == "__main__":
     smooth_map = np.zeros_like(x_mesh)
 
     start = time.perf_counter()
-    for i in range(x_mesh.shape[0]):
-        for j in range(x_mesh.shape[1]):
-            current_x = x_mesh[i, j]
-            current_y = y_mesh[i, j]
-            local_map[i, j] = smoother.estimate_scalar(
-                current_x, current_y, local_scale
-            )
-            smooth_map[i, j] = smoother.estimate_scalar(
-                current_x, current_y, smooth_scale
-            )
+
+    # Flatten meshes and call Rust batch estimator to avoid Python-level loops
+    flat_x = x_mesh.flatten()
+    flat_y = y_mesh.flatten()
+
+    flat_local = smoother.estimate_vector(flat_x, flat_y, local_scale)
+    flat_smooth = smoother.estimate_vector(flat_x, flat_y, smooth_scale)
+
+    local_map = np.asarray(flat_local).reshape(x_mesh.shape)
+    smooth_map = np.asarray(flat_smooth).reshape(x_mesh.shape)
+
     elapsed = time.perf_counter() - start
     print(
         f"Took {elapsed:2f} seconds to fill out a grid {x_mesh.shape[0]}x{x_mesh.shape[1]} or {x_mesh.shape[0] * x_mesh.shape[1]} points"

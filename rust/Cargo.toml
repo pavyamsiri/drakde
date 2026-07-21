@@ -7,3 +7,14 @@ edition = "2024"
 ndarray = "0.17.2"
 numpy = "0.29.0"
 pyo3 = "0.29.0"
+rayon = "1.7"
+wide = "0.8"
+kiddo = { version = "6.0.0-alpha.3" }
+
+[profile.release]
+# keep debug symbols in release builds to allow perf to map hotspots to Rust source
+debug = true
+opt-level = 3
+lto = false
+panic = 'abort'
+strip = false
