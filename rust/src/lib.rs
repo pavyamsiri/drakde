@@ -2,7 +2,7 @@ pub mod bivariate;
 
 #[pyo3::pymodule]
 mod _drakde {
-    use numpy::PyReadonlyArray1;
+    use numpy::{AllowTypeChange, PyArrayLike1, PyReadonlyArray1};
     use pyo3::prelude::*;
 
     use crate::bivariate;
@@ -13,7 +13,11 @@ mod _drakde {
     impl Clone for BivariateKDE {
         fn clone(&self) -> Self {
             let inner = &self.0;
-            BivariateKDE(bivariate::BivariateKDE::new(inner.x.clone(), inner.y.clone(), inner.weights.clone()))
+            BivariateKDE(bivariate::BivariateKDE::new(
+                inner.x.clone(),
+                inner.y.clone(),
+                inner.weights.clone(),
+            ))
         }
     }
 
@@ -24,9 +28,9 @@ mod _drakde {
         #[new]
         #[pyo3(signature = (x, y, weights=None))]
         pub fn new(
-            x: PyReadonlyArray1<'_, f64>,
-            y: PyReadonlyArray1<'_, f64>,
-            weights: Option<PyReadonlyArray1<'_, f64>>,
+            x: PyArrayLike1<'_, f32, AllowTypeChange>,
+            y: PyArrayLike1<'_, f32, AllowTypeChange>,
+            weights: Option<PyArrayLike1<'_, f32, AllowTypeChange>>,
         ) -> PyResult<Self> {
             let x_vec = x.as_array().to_vec();
             let y_vec = y.as_array().to_vec();
@@ -50,21 +54,25 @@ mod _drakde {
                 None => vec![1.0; x_vec.len()],
             };
 
-            Ok(BivariateKDE(bivariate::BivariateKDE::new(x_vec, y_vec, weights_vec)))
+            Ok(BivariateKDE(bivariate::BivariateKDE::new(
+                x_vec,
+                y_vec,
+                weights_vec,
+            )))
         }
 
         pub fn __repr__(&self) -> String {
             format!(
                 "BivariateKDE(n_points={}, x_range=[{:.2}, {:.2}], y_range=[{:.2}, {:.2}])",
                 self.0.x.len(),
-                self.0.x.iter().copied().fold(f64::INFINITY, f64::min),
-                self.0.x.iter().copied().fold(f64::NEG_INFINITY, f64::max),
-                self.0.y.iter().copied().fold(f64::INFINITY, f64::min),
-                self.0.y.iter().copied().fold(f64::NEG_INFINITY, f64::max),
+                self.0.x.iter().copied().fold(f32::INFINITY, f32::min),
+                self.0.x.iter().copied().fold(f32::NEG_INFINITY, f32::max),
+                self.0.y.iter().copied().fold(f32::INFINITY, f32::min),
+                self.0.y.iter().copied().fold(f32::NEG_INFINITY, f32::max),
             )
         }
 
-        pub fn estimate_scalar(&self, x: f64, y: f64, scale_length: f64) -> f64 {
+        pub fn estimate_scalar(&self, x: f32, y: f32, scale_length: f32) -> f32 {
             self.0.estimate_scalar(x, y, scale_length)
         }
 
@@ -73,10 +81,10 @@ mod _drakde {
         pub fn estimate_vector<'py>(
             &self,
             py: pyo3::prelude::Python<'py>,
-            xs: PyReadonlyArray1<'_ , f64>,
-            ys: PyReadonlyArray1<'_ , f64>,
-            scale_length: f64,
-        ) -> pyo3::PyResult<pyo3::Py< numpy::PyArray1<f64> >> {
+            xs: PyArrayLike1<'py, f32, AllowTypeChange>,
+            ys: PyArrayLike1<'py, f32, AllowTypeChange>,
+            scale_length: f32,
+        ) -> pyo3::PyResult<pyo3::Py<numpy::PyArray1<f32>>> {
             let xs_slice = xs.as_slice()?;
             let ys_slice = ys.as_slice()?;
             if xs_slice.len() != ys_slice.len() {
@@ -87,19 +95,17 @@ mod _drakde {
             let n = xs_slice.len();
 
             // Parallel evaluation using rayon
-            let results: Vec<f64> = (0..n)
+            let results: Vec<f32> = (0..n)
                 .into_par_iter()
-                .map(|i| self.0.estimate_scalar(xs_slice[i], ys_slice[i], scale_length))
+                .map(|i| {
+                    self.0
+                        .estimate_scalar(xs_slice[i], ys_slice[i], scale_length)
+                })
                 .collect();
 
             let arr = numpy::PyArray1::from_vec(py, results);
             // convert borrowed reference into owned Py<PyArray1<f64>>
             Ok(arr.to_owned().into())
         }
-    }
-
-    #[pyfunction]
-    fn hello() -> PyResult<String> {
-        Ok("Hello".to_owned())
     }
 }
