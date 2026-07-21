@@ -118,11 +118,11 @@ impl BivariateKDE {
     }
 
     pub fn estimate_scalar(&self, x: f32, y: f32, scale_length: f32) -> f32 {
-        // radius for including neighbors (3 sigma rule)
-        let radius = 4.0 * scale_length;
+        // radius for including neighbors (4 sigma rule)
+        let radius = 5.0 * scale_length;
         let candidates = self.candidates_within(x, y, radius);
 
-        // if candidates empty, fallback to using all points but keep SIMD path to avoid scalar exp
+        // if candidates empty, return 0
         if candidates.is_empty() {
             return f32::NAN;
         }
@@ -137,55 +137,57 @@ impl BivariateKDE {
         let mut acc_num = f32x8::splat(0.0);
         let mut acc_den = f32x8::splat(0.0);
 
+        let qx = f32x8::splat(x);
+        let qy = f32x8::splat(y);
+        let coeff2_vec = f32x8::splat(coeff2);
+        let s_inv_vec = f32x8::splat(s_inv);
+        let half = f32x8::splat(0.5);
+
+        let remaining_mask = f32x8::from(std::array::from_fn(|i| {
+            if i < (candidates.len() % 8) { 1.0 } else { 0.0 }
+        }));
+        let full_mask = f32x8::splat(1.0);
+
         for chunk in candidates.chunks(8) {
             let mut xs = [0.0f32; 8];
             let mut ys = [0.0f32; 8];
             let mut ws = [0.0f32; 8];
-            let mut mask = [0.0f32; 8];
+            let chunks_count = chunk.len();
+
             for (k, &idx) in chunk.iter().enumerate() {
                 xs[k] = self.x[idx];
                 ys[k] = self.y[idx];
                 ws[k] = self.weights[idx];
-                mask[k] = 1.0;
             }
+
             let vx = f32x8::from(xs);
             let vy = f32x8::from(ys);
             let vw = f32x8::from(ws);
-            let vmask = f32x8::from(mask);
 
-            let qx = f32x8::splat(x);
-            let qy = f32x8::splat(y);
-
-            // dx = xi - x0
+            // dx = xi - x0, dy = yi - y0
             let dx = qx - vx;
             let dy = qy - vy;
 
             // compute exponent argument: -0.5 * (dx/s)^2
-            let dxs = dx * f32x8::splat(s_inv);
-            let dys = dy * f32x8::splat(s_inv);
-            let arg = -f32x8::splat(0.5) * (dxs * dxs + dys * dys);
+            let dxs = dx * s_inv_vec;
+            let dys = dy * s_inv_vec;
+            let arg = -half * (dxs * dxs + dys * dys);
 
-            let kvec = vmask * f32x8::splat(coeff2) * Self::exp_approx(arg);
-
-            // contribution = w * k
+            let kvec = coeff2_vec * Self::exp_approx(arg);
             let contrib = vw * kvec;
 
-            // accumulate vector-wise
-            acc_num += contrib;
-            acc_den += kvec;
+            let vmask = if chunks_count < 8 {
+                remaining_mask
+            } else {
+                full_mask
+            };
+            acc_num += contrib * vmask;
+            acc_den += kvec * vmask;
         }
 
         // convert accumulated vectors to scalars once
-        let carr: [f32; 8] = acc_num.to_array();
-        let karr: [f32; 8] = acc_den.to_array();
-        let mut sum_num = 0.0;
-        let mut sum_den = 0.0;
-        for i in 0..8 {
-            sum_num += carr[i];
-            sum_den += karr[i];
-        }
-        let numer = sum_num;
-        let denom = sum_den;
+        let numer: f32 = acc_num.to_array().into_iter().sum();
+        let denom: f32 = acc_den.to_array().into_iter().sum();
         if denom == 0.0 { 0.0 } else { numer / denom }
     }
 }
