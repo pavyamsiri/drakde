@@ -117,9 +117,8 @@ impl BivariateKDE {
         results.into_iter().map(|n| n.item).collect()
     }
 
-    pub fn estimate_scalar(&self, x: f32, y: f32, scale_length: f32) -> f32 {
-        // radius for including neighbors (4 sigma rule)
-        let radius = 5.0 * scale_length;
+    pub fn estimate_scalar(&self, x: f32, y: f32, scale_length: f32, num_sigma: f32) -> f32 {
+        let radius = num_sigma * scale_length;
         let candidates = self.candidates_within(x, y, radius);
 
         // if candidates empty, return 0
@@ -147,6 +146,7 @@ impl BivariateKDE {
             if i < (candidates.len() % 8) { 1.0 } else { 0.0 }
         }));
         let full_mask = f32x8::splat(1.0);
+        let masks = [remaining_mask, full_mask];
 
         for chunk in candidates.chunks(8) {
             let mut xs = [0.0f32; 8];
@@ -176,11 +176,8 @@ impl BivariateKDE {
             let kvec = coeff2_vec * Self::exp_approx(arg);
             let contrib = vw * kvec;
 
-            let vmask = if chunks_count < 8 {
-                remaining_mask
-            } else {
-                full_mask
-            };
+            let mask_idx = (chunks_count == 8) as usize;
+            let vmask = masks[mask_idx];
             acc_num += contrib * vmask;
             acc_den += kvec * vmask;
         }

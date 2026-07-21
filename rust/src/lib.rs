@@ -2,7 +2,7 @@ pub mod bivariate;
 
 #[pyo3::pymodule]
 mod _drakde {
-    use numpy::{AllowTypeChange, PyArrayLike1, PyReadonlyArray1};
+    use numpy::{AllowTypeChange, PyArrayLike1};
     use pyo3::prelude::*;
 
     use crate::bivariate;
@@ -63,7 +63,7 @@ mod _drakde {
 
         pub fn __repr__(&self) -> String {
             format!(
-                "BivariateKDE(n_points={}, x_range=[{:.2}, {:.2}], y_range=[{:.2}, {:.2}])",
+                "BivariateKDE(num_points={}, x_range=[{:.2}, {:.2}], y_range=[{:.2}, {:.2}])",
                 self.0.x.len(),
                 self.0.x.iter().copied().fold(f32::INFINITY, f32::min),
                 self.0.x.iter().copied().fold(f32::NEG_INFINITY, f32::max),
@@ -72,18 +72,20 @@ mod _drakde {
             )
         }
 
-        pub fn estimate_scalar(&self, x: f32, y: f32, scale_length: f32) -> f32 {
-            self.0.estimate_scalar(x, y, scale_length)
+        pub fn estimate_scalar(&self, x: f32, y: f32, scale_length: f32, num_sigma: f32) -> f32 {
+            self.0.estimate_scalar(x, y, scale_length, num_sigma)
         }
 
         /// Estimate for many (x,y) pairs in a single call. This avoids Python-level loops.
         /// xs and ys must be 1-D arrays of the same length. Returns a NumPy array of results.
+        #[pyo3(signature = (xs, ys, scale_length, num_sigma=4.0))]
         pub fn estimate_vector<'py>(
             &self,
             py: pyo3::prelude::Python<'py>,
             xs: PyArrayLike1<'py, f32, AllowTypeChange>,
             ys: PyArrayLike1<'py, f32, AllowTypeChange>,
             scale_length: f32,
+            num_sigma: f32,
         ) -> pyo3::PyResult<pyo3::Py<numpy::PyArray1<f32>>> {
             let xs_slice = xs.as_slice()?;
             let ys_slice = ys.as_slice()?;
@@ -99,7 +101,7 @@ mod _drakde {
                 .into_par_iter()
                 .map(|i| {
                     self.0
-                        .estimate_scalar(xs_slice[i], ys_slice[i], scale_length)
+                        .estimate_scalar(xs_slice[i], ys_slice[i], scale_length, num_sigma)
                 })
                 .collect();
 
