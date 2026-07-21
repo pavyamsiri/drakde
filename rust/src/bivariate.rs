@@ -118,7 +118,7 @@ impl BivariateKDE {
     }
 
     pub fn estimate_scalar(&self, x: f32, y: f32, scale_length: f32, num_sigma: f32) -> f32 {
-        let radius = num_sigma * scale_length;
+        let radius = (num_sigma * scale_length).max(4.0);
         let candidates = self.candidates_within(x, y, radius);
 
         // if candidates empty, return 0
@@ -128,17 +128,13 @@ impl BivariateKDE {
 
         // vectorized evaluation over candidate indices using f32x8 when possible
         let s_inv = 1.0f32 / scale_length;
-        // coeff1 = 1/(sqrt(2*pi)*s); the 2D kernel normalization is coeff1*coeff1 = 1/(2*pi*s^2)
-        let coeff1 = ((2.0f32 * std::f32::consts::PI).sqrt() * scale_length).recip();
-        let coeff2 = coeff1 * coeff1;
 
         // accumulate vector sums to minimize lane->scalar conversions
-        let mut acc_num = f32x8::splat(0.0);
-        let mut acc_den = f32x8::splat(0.0);
+        let mut acc_num = f32x8::ZERO;
+        let mut acc_den = f32x8::ZERO;
 
         let qx = f32x8::splat(x);
         let qy = f32x8::splat(y);
-        let coeff2_vec = f32x8::splat(coeff2);
         let s_inv_vec = f32x8::splat(s_inv);
         let half = f32x8::splat(0.5);
 
@@ -173,7 +169,7 @@ impl BivariateKDE {
             let dys = dy * s_inv_vec;
             let arg = -half * (dxs * dxs + dys * dys);
 
-            let kvec = coeff2_vec * Self::exp_approx(arg);
+            let kvec = Self::exp_approx(arg);
             let contrib = vw * kvec;
 
             let mask_idx = (chunks_count == 8) as usize;

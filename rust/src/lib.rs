@@ -72,6 +72,7 @@ mod _drakde {
             )
         }
 
+        #[pyo3(signature = (x, y, scale_length, num_sigma=4.0))]
         pub fn estimate_scalar(&self, x: f32, y: f32, scale_length: f32, num_sigma: f32) -> f32 {
             self.0.estimate_scalar(x, y, scale_length, num_sigma)
         }
