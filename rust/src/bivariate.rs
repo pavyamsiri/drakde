@@ -24,17 +24,6 @@ impl BivariateKDE {
         let tree: KdTree<f32, usize, Eytzinger, FlatVec<f32, usize, 2, 32>, 2, 32> =
             KdTree::new_from_slice(&points).expect("kd-tree construction failed");
 
-        // build LUT for exp on r in [-ln2/2, ln2/2]
-        let lut_size = 256usize;
-        let lut_min = -(std::f32::consts::LN_2) * 0.5_f32;
-        let lut_max = (std::f32::consts::LN_2) * 0.5_f32;
-        let step = (lut_max - lut_min) / ((lut_size - 1) as f32);
-        let mut lut: Vec<f32> = Vec::with_capacity(lut_size);
-        for i in 0..lut_size {
-            let r = lut_min + (i as f32) * step;
-            lut.push(r.exp());
-        }
-
         Self {
             x,
             y,
@@ -152,14 +141,17 @@ impl BivariateKDE {
             let mut xs = [0.0f32; 8];
             let mut ys = [0.0f32; 8];
             let mut ws = [0.0f32; 8];
+            let mut mask = [0.0f32; 8];
             for (k, &idx) in chunk.iter().enumerate() {
                 xs[k] = self.x[idx];
                 ys[k] = self.y[idx];
                 ws[k] = self.weights[idx];
+                mask[k] = 1.0;
             }
             let vx = f32x8::from(xs);
             let vy = f32x8::from(ys);
             let vw = f32x8::from(ws);
+            let vmask = f32x8::from(mask);
 
             let qx = f32x8::splat(x);
             let qy = f32x8::splat(y);
@@ -173,8 +165,7 @@ impl BivariateKDE {
             let dys = dy * f32x8::splat(s_inv);
             let arg = -f32x8::splat(0.5) * (dxs * dxs + dys * dys);
 
-            // switchable exp: try LUT-based approximation
-            let kvec = f32x8::splat(coeff2) * Self::exp_approx(arg);
+            let kvec = vmask * f32x8::splat(coeff2) * Self::exp_approx(arg);
 
             // contribution = w * k
             let contrib = vw * kvec;
