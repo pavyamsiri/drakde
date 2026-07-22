@@ -5,7 +5,7 @@ mod _drakde {
     use numpy::{AllowTypeChange, PyArrayLike1};
     use pyo3::prelude::*;
 
-    use crate::bivariate;
+    use crate::bivariate::{self, BivariateGaussian};
 
     #[pyclass(skip_from_py_object)]
     pub struct BivariateKDE(bivariate::BivariateKDE);
@@ -74,7 +74,8 @@ mod _drakde {
 
         #[pyo3(signature = (x, y, scale_length, num_sigma=4.0))]
         pub fn estimate_scalar(&self, x: f32, y: f32, scale_length: f32, num_sigma: f32) -> f32 {
-            self.0.estimate_scalar(x, y, scale_length, num_sigma)
+            self.0
+                .estimate_scalar::<BivariateGaussian>(x, y, scale_length, num_sigma)
         }
 
         /// Estimate for many (x,y) pairs in a single call. This avoids Python-level loops.
@@ -101,8 +102,12 @@ mod _drakde {
             let results: Vec<f32> = (0..n)
                 .into_par_iter()
                 .map(|i| {
-                    self.0
-                        .estimate_scalar(xs_slice[i], ys_slice[i], scale_length, num_sigma)
+                    self.0.estimate_scalar::<BivariateGaussian>(
+                        xs_slice[i],
+                        ys_slice[i],
+                        scale_length,
+                        num_sigma,
+                    )
                 })
                 .collect();
 
