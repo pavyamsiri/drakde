@@ -2,6 +2,11 @@ use kiddo::KdTree;
 use kiddo::{Eytzinger, dist::SquaredEuclidean, leaf_strategy::FlatVec};
 use wide::f32x8;
 
+#[derive(Debug, Clone, Copy)]
+pub enum KernelKind {
+    Gaussian,
+}
+
 pub trait Kernel {
     type T;
     fn init(x: f32, y: f32, scale_length: f32) -> Self::T;
@@ -151,6 +156,21 @@ impl BivariateKDE {
         let numer: f32 = acc_num.to_array().into_iter().sum();
         let denom: f32 = acc_den.to_array().into_iter().sum();
         if denom == 0.0 { 0.0 } else { numer / denom }
+    }
+
+    pub fn estimate(
+        &self,
+        x: f32,
+        y: f32,
+        scale_length: f32,
+        num_sigma: f32,
+        kernel_kind: KernelKind,
+    ) -> f32 {
+        match kernel_kind {
+            KernelKind::Gaussian => {
+                self.estimate_scalar::<BivariateGaussian>(x, y, scale_length, num_sigma)
+            }
+        }
     }
 }
 

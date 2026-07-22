@@ -5,19 +5,38 @@ mod _drakde {
     use numpy::{AllowTypeChange, PyArrayLike1};
     use pyo3::prelude::*;
 
-    use crate::bivariate::{self, BivariateGaussian};
+    use crate::bivariate::{self, BivariateGaussian, KernelKind};
+
+    #[pyclass(from_py_object, eq, eq_int)]
+    #[derive(Clone, Copy, PartialEq)]
+    pub enum PyKernelKind {
+        Gaussian = 0,
+    }
+
+    impl From<PyKernelKind> for KernelKind {
+        fn from(k: PyKernelKind) -> Self {
+            match k {
+                PyKernelKind::Gaussian => KernelKind::Gaussian,
+            }
+        }
+    }
 
     #[pyclass(skip_from_py_object)]
-    pub struct BivariateKDE(bivariate::BivariateKDE);
+    pub struct BivariateKDE {
+        inner: bivariate::BivariateKDE,
+        kernel: KernelKind,
+    }
 
     impl Clone for BivariateKDE {
         fn clone(&self) -> Self {
-            let inner = &self.0;
-            BivariateKDE(bivariate::BivariateKDE::new(
-                inner.x.clone(),
-                inner.y.clone(),
-                inner.weights.clone(),
-            ))
+            BivariateKDE {
+                inner: bivariate::BivariateKDE::new(
+                    self.inner.x.clone(),
+                    self.inner.y.clone(),
+                    self.inner.weights.clone(),
+                ),
+                kernel: self.kernel,
+            }
         }
     }
 
@@ -26,11 +45,12 @@ mod _drakde {
     #[pymethods]
     impl BivariateKDE {
         #[new]
-        #[pyo3(signature = (x, y, weights=None))]
+        #[pyo3(signature = (x, y, weights=None, kernel=PyKernelKind::Gaussian))]
         pub fn new(
             x: PyArrayLike1<'_, f32, AllowTypeChange>,
             y: PyArrayLike1<'_, f32, AllowTypeChange>,
             weights: Option<PyArrayLike1<'_, f32, AllowTypeChange>>,
+            kernel: PyKernelKind,
         ) -> PyResult<Self> {
             let x_vec = x.as_array().to_vec();
             let y_vec = y.as_array().to_vec();
@@ -54,27 +74,34 @@ mod _drakde {
                 None => vec![1.0; x_vec.len()],
             };
 
-            Ok(BivariateKDE(bivariate::BivariateKDE::new(
-                x_vec,
-                y_vec,
-                weights_vec,
-            )))
+            Ok(BivariateKDE {
+                inner: bivariate::BivariateKDE::new(x_vec, y_vec, weights_vec),
+                kernel: kernel.into(),
+            })
         }
 
         pub fn __repr__(&self) -> String {
             format!(
                 "BivariateKDE(num_points={}, x_range=[{:.2}, {:.2}], y_range=[{:.2}, {:.2}])",
-                self.0.x.len(),
-                self.0.x.iter().copied().fold(f32::INFINITY, f32::min),
-                self.0.x.iter().copied().fold(f32::NEG_INFINITY, f32::max),
-                self.0.y.iter().copied().fold(f32::INFINITY, f32::min),
-                self.0.y.iter().copied().fold(f32::NEG_INFINITY, f32::max),
+                self.inner.x.len(),
+                self.inner.x.iter().copied().fold(f32::INFINITY, f32::min),
+                self.inner
+                    .x
+                    .iter()
+                    .copied()
+                    .fold(f32::NEG_INFINITY, f32::max),
+                self.inner.y.iter().copied().fold(f32::INFINITY, f32::min),
+                self.inner
+                    .y
+                    .iter()
+                    .copied()
+                    .fold(f32::NEG_INFINITY, f32::max),
             )
         }
 
         #[pyo3(signature = (x, y, scale_length, num_sigma=4.0))]
         pub fn estimate_scalar(&self, x: f32, y: f32, scale_length: f32, num_sigma: f32) -> f32 {
-            self.0
+            self.inner
                 .estimate_scalar::<BivariateGaussian>(x, y, scale_length, num_sigma)
         }
 
@@ -102,11 +129,12 @@ mod _drakde {
             let results: Vec<f32> = (0..n)
                 .into_par_iter()
                 .map(|i| {
-                    self.0.estimate_scalar::<BivariateGaussian>(
+                    self.inner.estimate(
                         xs_slice[i],
                         ys_slice[i],
                         scale_length,
                         num_sigma,
+                        self.kernel,
                     )
                 })
                 .collect();
