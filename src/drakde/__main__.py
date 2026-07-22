@@ -24,7 +24,7 @@ if __name__ == "__main__":
         x_mesh[mask].flatten(),
         y_mesh[mask].flatten(),
         mean_nu[mask].flatten(),
-        kernel=PyKernelKind.Epanechnikov,
+        kernel=PyKernelKind.Quartic,
     )
 
     bin_size_xy: float = 0.125

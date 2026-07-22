@@ -6,6 +6,7 @@ import enum
 class PyKernelKind(enum.IntEnum):
     Gaussian = 0
     Epanechnikov = 1
+    Quartic = 2
 
 class BivariateKDE:
     """Typed stub for the compiled BivariateKDE extension.

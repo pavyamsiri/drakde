@@ -6,6 +6,7 @@ use wide::{CmpLt, f32x8};
 pub enum KernelKind {
     Gaussian,
     Epanechnikov,
+    Quartic,
 }
 
 pub trait Kernel {
@@ -93,6 +94,33 @@ impl Kernel for Epanechnikov {
 
     fn support_hint(scale_length: f32) -> f32 {
         scale_length
+    }
+}
+
+pub struct Quartic;
+
+impl Kernel for Quartic {
+    type T = Epanechnikov;
+
+    fn init(x: f32, y: f32, scale_length: f32) -> Self::T {
+        Epanechnikov::init(x, y, scale_length)
+    }
+
+    fn support_hint(scale_length: f32) -> f32 {
+        scale_length
+    }
+
+    fn compute_chunk(data: &Self::T, vx: f32x8, vy: f32x8, vw: f32x8) -> (f32x8, f32x8) {
+        let dx = data.qx - vx;
+        let dy = data.qy - vy;
+        let u2 = (dx * dx + dy * dy) * data.inv_r2;
+
+        let inside = u2.simd_lt(f32x8::ONE); // mask: 1.0 where u2 < 1, else 0.0
+        let arg = (f32x8::ONE - u2).max(f32x8::ZERO);
+        let result = (arg * arg) * f32x8::splat(15.0 / 16.0);
+        let kvec = inside.blend(result, f32x8::ZERO);
+
+        (vw * kvec, kvec)
     }
 }
 
@@ -196,6 +224,7 @@ impl BivariateKDE {
         match kernel_kind {
             KernelKind::Gaussian => self.estimate_scalar::<BivariateGaussian>(x, y, scale_length),
             KernelKind::Epanechnikov => self.estimate_scalar::<Epanechnikov>(x, y, scale_length),
+            KernelKind::Quartic => self.estimate_scalar::<Quartic>(x, y, scale_length),
         }
     }
 }

@@ -5,13 +5,14 @@ mod _drakde {
     use numpy::{AllowTypeChange, PyArrayLike1};
     use pyo3::prelude::*;
 
-    use crate::bivariate::{self, BivariateGaussian, KernelKind};
+    use crate::bivariate::{self, KernelKind};
 
     #[pyclass(from_py_object, eq, eq_int)]
     #[derive(Clone, Copy, PartialEq)]
     pub enum PyKernelKind {
         Gaussian = 0,
         Epanechnikov = 1,
+        Quartic = 2,
     }
 
     impl From<PyKernelKind> for KernelKind {
@@ -19,6 +20,7 @@ mod _drakde {
             match k {
                 PyKernelKind::Gaussian => KernelKind::Gaussian,
                 PyKernelKind::Epanechnikov => KernelKind::Epanechnikov,
+                PyKernelKind::Quartic => KernelKind::Quartic,
             }
         }
     }
