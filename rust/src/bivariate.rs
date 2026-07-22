@@ -1,15 +1,17 @@
 use kiddo::KdTree;
 use kiddo::{Eytzinger, dist::SquaredEuclidean, leaf_strategy::FlatVec};
-use wide::f32x8;
+use wide::{CmpLt, f32x8};
 
 #[derive(Debug, Clone, Copy)]
 pub enum KernelKind {
     Gaussian,
+    Epanechnikov,
 }
 
 pub trait Kernel {
     type T;
     fn init(x: f32, y: f32, scale_length: f32) -> Self::T;
+    fn support_hint(scale_length: f32) -> f32;
     fn compute_chunk(data: &Self::T, vx: f32x8, vy: f32x8, vw: f32x8) -> (f32x8, f32x8);
 }
 
@@ -53,6 +55,44 @@ impl Kernel for BivariateGaussian {
         let kvec = exp_approx(arg);
 
         (vw * kvec, kvec)
+    }
+
+    fn support_hint(scale_length: f32) -> f32 {
+        5.0 * scale_length
+    }
+}
+
+pub struct Epanechnikov {
+    qx: f32x8,
+    qy: f32x8,
+    inv_r2: f32x8, // 1 / radius^2
+}
+
+impl Kernel for Epanechnikov {
+    type T = Self;
+
+    fn init(x: f32, y: f32, scale_length: f32) -> Self::T {
+        Self::T {
+            qx: f32x8::splat(x),
+            qy: f32x8::splat(y),
+            inv_r2: f32x8::splat(1.0 / (scale_length * scale_length)),
+        }
+    }
+
+    fn compute_chunk(data: &Self::T, vx: f32x8, vy: f32x8, vw: f32x8) -> (f32x8, f32x8) {
+        let dx = data.qx - vx;
+        let dy = data.qy - vy;
+        let u2 = (dx * dx + dy * dy) * data.inv_r2;
+
+        let inside = u2.simd_lt(f32x8::ONE); // mask: 1.0 where u2 < 1, else 0.0
+        let result = (f32x8::ONE - u2).max(f32x8::ZERO) * f32x8::splat(0.75);
+        let kvec = inside.blend(result, f32x8::ZERO);
+
+        (vw * kvec, kvec)
+    }
+
+    fn support_hint(scale_length: f32) -> f32 {
+        scale_length
     }
 }
 
@@ -101,14 +141,8 @@ impl BivariateKDE {
         results.into_iter().map(|n| n.item).collect()
     }
 
-    pub fn estimate_scalar<K: Kernel>(
-        &self,
-        x: f32,
-        y: f32,
-        scale_length: f32,
-        num_sigma: f32,
-    ) -> f32 {
-        let radius = (num_sigma * scale_length).max(4.0);
+    pub fn estimate_scalar<K: Kernel>(&self, x: f32, y: f32, scale_length: f32) -> f32 {
+        let radius = K::support_hint(scale_length);
         let candidates = self.candidates_within(x, y, radius);
 
         // if candidates empty, return 0
@@ -158,18 +192,10 @@ impl BivariateKDE {
         if denom == 0.0 { 0.0 } else { numer / denom }
     }
 
-    pub fn estimate(
-        &self,
-        x: f32,
-        y: f32,
-        scale_length: f32,
-        num_sigma: f32,
-        kernel_kind: KernelKind,
-    ) -> f32 {
+    pub fn estimate(&self, x: f32, y: f32, scale_length: f32, kernel_kind: KernelKind) -> f32 {
         match kernel_kind {
-            KernelKind::Gaussian => {
-                self.estimate_scalar::<BivariateGaussian>(x, y, scale_length, num_sigma)
-            }
+            KernelKind::Gaussian => self.estimate_scalar::<BivariateGaussian>(x, y, scale_length),
+            KernelKind::Epanechnikov => self.estimate_scalar::<Epanechnikov>(x, y, scale_length),
         }
     }
 }

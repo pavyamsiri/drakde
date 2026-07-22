@@ -1,19 +1,30 @@
+from __future__ import annotations
+from typing import TYPE_CHECKING
+
 import numpy as np
 
-from drakde._drakde import BivariateKDE
+from drakde._drakde import BivariateKDE, PyKernelKind
 import time
+from numpy.lib.npyio import NpzFile
+
+if TYPE_CHECKING:
+    from optype import numpy as onp
 
 show: bool = True
 
 if __name__ == "__main__":
-    data = np.load("./data/data.npz")
-    x_mesh = data["x_mesh"].astype(np.float32)
-    y_mesh = data["y_mesh"].astype(np.float32)
-    mean_nu = data["mean_nu"].astype(np.float32)
+    data = np.load("./data/data.npz")  # pyright: ignore[reportAny]
+    assert isinstance(data, NpzFile)
+    x_mesh: onp.Array2D[np.float32] = data["x_mesh"].astype(np.float32)
+    y_mesh: onp.Array2D[np.float32] = data["y_mesh"].astype(np.float32)
+    mean_nu: onp.Array2D[np.float32] = data["mean_nu"].astype(np.float32)
 
     mask = np.isfinite(mean_nu)
     smoother = BivariateKDE(
-        x_mesh[mask].flatten(), y_mesh[mask].flatten(), mean_nu[mask].flatten()
+        x_mesh[mask].flatten(),
+        y_mesh[mask].flatten(),
+        mean_nu[mask].flatten(),
+        kernel=PyKernelKind.Epanechnikov,
     )
 
     bin_size_xy: float = 0.125

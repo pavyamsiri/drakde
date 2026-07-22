@@ -1,6 +1,11 @@
 from typing import override
 import numpy as np
 import optype.numpy as onp
+import enum
+
+class PyKernelKind(enum.IntEnum):
+    Gaussian = 0
+    Epanechnikov = 1
 
 class BivariateKDE:
     """Typed stub for the compiled BivariateKDE extension.
@@ -13,6 +18,7 @@ class BivariateKDE:
         x: onp.Array1D[np.float32 | np.float64],
         y: onp.Array1D[np.float32 | np.float64],
         weights: onp.Array1D[np.float32 | np.float64] | None = None,
+        kernel: PyKernelKind = PyKernelKind.Gaussian,
     ) -> None: ...
     @override
     def __repr__(self) -> str: ...
@@ -26,12 +32,10 @@ class BivariateKDE:
         x: float,
         y: float,
         scale_length: float,
-        num_sigma: float = 4.0,
     ) -> float: ...
     def estimate_vector(
         self,
         xs: onp.Array1D[np.float32 | np.float64],
         ys: onp.Array1D[np.float32 | np.float64],
         scale_length: float,
-        num_sigma: float = 4.0,
     ) -> onp.Array1D[np.float32]: ...

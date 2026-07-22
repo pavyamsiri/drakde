@@ -72,24 +72,26 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "numpy" },
+    { name = "optype", extra = ["numpy"] },
 ]
 
 [package.dev-dependencies]
 dev = [
     { name = "matplotlib" },
-    { name = "optype", extra = ["numpy"] },
     { name = "pyqt6" },
     { name = "scipy" },
     { name = "scipy-stubs" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "numpy", specifier = ">=2.5.1" }]
+requires-dist = [
+    { name = "numpy", specifier = ">=2.5.1" },
+    { name = "optype", extras = ["numpy"], specifier = ">=0.18.0" },
+]
 
 [package.metadata.requires-dev]
 dev = [
     { name = "matplotlib", specifier = ">=3.11.1" },
-    { name = "optype", extras = ["numpy"], specifier = ">=0.18.0" },
     { name = "pyqt6", specifier = ">=6.11.0" },
     { name = "scipy", specifier = ">=1.18.0" },
     { name = "scipy-stubs", specifier = ">=1.18.0.1" },

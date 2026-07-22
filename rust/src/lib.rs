@@ -11,12 +11,14 @@ mod _drakde {
     #[derive(Clone, Copy, PartialEq)]
     pub enum PyKernelKind {
         Gaussian = 0,
+        Epanechnikov = 1,
     }
 
     impl From<PyKernelKind> for KernelKind {
         fn from(k: PyKernelKind) -> Self {
             match k {
                 PyKernelKind::Gaussian => KernelKind::Gaussian,
+                PyKernelKind::Epanechnikov => KernelKind::Epanechnikov,
             }
         }
     }
@@ -99,22 +101,20 @@ mod _drakde {
             )
         }
 
-        #[pyo3(signature = (x, y, scale_length, num_sigma=4.0))]
-        pub fn estimate_scalar(&self, x: f32, y: f32, scale_length: f32, num_sigma: f32) -> f32 {
-            self.inner
-                .estimate_scalar::<BivariateGaussian>(x, y, scale_length, num_sigma)
+        #[pyo3(signature = (x, y, scale_length))]
+        pub fn estimate_scalar(&self, x: f32, y: f32, scale_length: f32) -> f32 {
+            self.inner.estimate(x, y, scale_length, self.kernel)
         }
 
         /// Estimate for many (x,y) pairs in a single call. This avoids Python-level loops.
         /// xs and ys must be 1-D arrays of the same length. Returns a NumPy array of results.
-        #[pyo3(signature = (xs, ys, scale_length, num_sigma=4.0))]
+        #[pyo3(signature = (xs, ys, scale_length))]
         pub fn estimate_vector<'py>(
             &self,
             py: pyo3::prelude::Python<'py>,
             xs: PyArrayLike1<'py, f32, AllowTypeChange>,
             ys: PyArrayLike1<'py, f32, AllowTypeChange>,
             scale_length: f32,
-            num_sigma: f32,
         ) -> pyo3::PyResult<pyo3::Py<numpy::PyArray1<f32>>> {
             let xs_slice = xs.as_slice()?;
             let ys_slice = ys.as_slice()?;
@@ -129,13 +129,8 @@ mod _drakde {
             let results: Vec<f32> = (0..n)
                 .into_par_iter()
                 .map(|i| {
-                    self.inner.estimate(
-                        xs_slice[i],
-                        ys_slice[i],
-                        scale_length,
-                        num_sigma,
-                        self.kernel,
-                    )
+                    self.inner
+                        .estimate(xs_slice[i], ys_slice[i], scale_length, self.kernel)
                 })
                 .collect();
 
