@@ -8,10 +8,7 @@ authors = [
 ]
 requires-python = ">=3.13"
 dependencies = [
-    "matplotlib>=3.11.1",
     "numpy>=2.5.1",
-    "optype[numpy]>=0.18.0",
-    "pyqt6>=6.11.0",
 ]
 
 [build-system]
@@ -25,3 +22,12 @@ module-name = "drakde._drakde"
 include = ["src"]
 venvPath = "."
 venv = ".venv"
+
+[dependency-groups]
+dev = [
+    "matplotlib>=3.11.1",
+    "optype[numpy]>=0.18.0",
+    "scipy>=1.18.0",
+    "scipy-stubs>=1.18.0.1",
+    "pyqt6>=6.11.0",
+]
