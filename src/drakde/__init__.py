@@ -1,3 +1,3 @@
-from ._drakde import BivariateKDE
+from ._drakde import BivariateKDE, PyKernelKind
 
-__all__: list[str] = ["BivariateKDE"]
+__all__: list[str] = ["BivariateKDE", "PyKernelKind"]
